@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Parts Inventory</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+  :root {
+    --bg: #0f1117; --surface: #1a1d27; --border: #2a2d3a;
+    --accent: #f7931a; --accent2: #00d4ff; --text: #e8eaf0;
+    --muted: #6b7280; --danger: #ef4444; --success: #22c55e; --warning: #f59e0b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'IBM Plex Sans', sans-serif; font-size: 14px; min-height: 100vh; padding-bottom: 80px; }
+  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 16px; position: sticky; top: 0; z-index: 100; display: flex; align-items: center; gap: 12px; }
+  header h1 { font-family: 'IBM Plex Mono', monospace; font-size: 16px; font-weight: 600; color: var(--accent); letter-spacing: -0.5px; flex: 1; }
+  header .stats { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--muted); }
+  .export-btn { background: transparent; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; color: var(--muted); font-size: 11px; font-family: 'IBM Plex Mono', monospace; cursor: pointer; }
+  .toolbar { padding: 12px 16px; display: flex; gap: 8px; flex-wrap: wrap; background: var(--bg); border-bottom: 1px solid var(--border); position: sticky; top: 57px; z-index: 99; }
+  .search-wrap { flex: 1; min-width: 160px; position: relative; }
+  .search-wrap input { width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px 8px 32px; color: var(--text); font-family: 'IBM Plex Sans', sans-serif; font-size: 13px; outline: none; }
+  .search-wrap input:focus { border-color: var(--accent2); }
+  .search-wrap::before { content: 'o'; position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 16px; pointer-events: none; }
+  .filter-btn { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; color: var(--muted); font-size: 12px; font-family: 'IBM Plex Mono', monospace; cursor: pointer; white-space: nowrap; transition: all 0.15s; }
+  .filter-btn.active { background: var(--accent); border-color: var(--accent); color: #000; font-weight: 600; }
+  .scan-btn { background: var(--surface); border: 1px solid var(--accent2); border-radius: 8px; padding: 8px 12px; color: var(--accent2); font-size: 16px; cursor: pointer; line-height: 1; }
+  .add-btn { background: var(--accent); border: none; border-radius: 8px; padding: 8px 14px; color: #000; font-weight: 600; font-size: 18px; cursor: pointer; line-height: 1; }
+  .section-header { font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); padding: 12px 16px 6px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; }
+  .section-header .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  .item-card { background: var(--surface); border-bottom: 1px solid var(--border); padding: 12px 16px; display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; cursor: pointer; transition: background 0.1s; }
+  .item-card:active { background: #22253a; }
+  .item-name { font-weight: 500; font-size: 14px; grid-column: 1; color: var(--text); line-height: 1.3; }
+  .item-price { font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; color: var(--accent); grid-column: 2; grid-row: 1; text-align: right; white-space: nowrap; }
+  .item-meta { font-size: 11px; color: var(--muted); grid-column: 1; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .qty-badge { font-family: 'IBM Plex Mono', monospace; font-size: 11px; background: #2a2d3a; border-radius: 4px; padding: 1px 6px; color: var(--text); grid-column: 2; grid-row: 2; text-align: right; }
+  .tag { background: #2a2d3a; border-radius: 4px; padding: 1px 6px; font-size: 10px; font-family: 'IBM Plex Mono', monospace; color: var(--muted); }
+  .tag.microcontroller { color: var(--accent2); border: 1px solid var(--accent2); background: transparent; }
+  .tag.display { color: #a78bfa; border: 1px solid #a78bfa; background: transparent; }
+  .tag.motor { color: var(--success); border: 1px solid var(--success); background: transparent; }
+  .tag.sensor { color: var(--warning); border: 1px solid var(--warning); background: transparent; }
+  .tag.power { color: var(--danger); border: 1px solid var(--danger); background: transparent; }
+  .tag.kit { color: var(--accent); border: 1px solid var(--accent); background: transparent; }
+  .tag.audio { color: #f472b6; border: 1px solid #f472b6; background: transparent; }
+  .tag.storage { color: var(--muted); border: 1px solid var(--border); background: transparent; }
+  .tag.toy { color: #fbbf24; border: 1px solid #fbbf24; background: transparent; }
+  .tag.clearance { color: var(--success); }
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 200; display: flex; align-items: flex-end; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+  .modal-overlay.open { opacity: 1; pointer-events: all; }
+  .modal { background: var(--surface); border-radius: 20px 20px 0 0; padding: 20px 20px 40px; width: 100%; transform: translateY(100%); transition: transform 0.25s cubic-bezier(0.32,0.72,0,1); max-height: 90vh; overflow-y: auto; }
+  .modal-overlay.open .modal { transform: translateY(0); }
+  .modal-handle { width: 36px; height: 4px; background: var(--border); border-radius: 2px; margin: 0 auto 16px; }
+  .modal h2 { font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: var(--accent); margin-bottom: 16px; font-weight: 600; }
+  .field-group { margin-bottom: 14px; }
+  .field-group label { display: block; font-size: 11px; font-family: 'IBM Plex Mono', monospace; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 6px; }
+  .field-group input, .field-group select, .field-group textarea { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; color: var(--text); font-family: 'IBM Plex Sans', sans-serif; font-size: 14px; outline: none; }
+  .field-group input:focus, .field-group select:focus, .field-group textarea:focus { border-color: var(--accent2); }
+  .field-group textarea { resize: vertical; min-height: 70px; font-size: 12px; }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+  .btn-save { flex: 1; background: var(--accent); border: none; border-radius: 10px; padding: 14px; color: #000; font-weight: 700; font-size: 15px; cursor: pointer; font-family: 'IBM Plex Sans', sans-serif; }
+  .btn-delete { background: transparent; border: 1px solid var(--danger); border-radius: 10px; padding: 14px 18px; color: var(--danger); font-size: 18px; cursor: pointer; }
+  .btn-cancel { flex: 0.6; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 14px; color: var(--muted); font-size: 14px; cursor: pointer; font-family: 'IBM Plex Sans', sans-serif; }
+  .total-bar { position: fixed; bottom: 0; left: 0; right: 0; background: var(--surface); border-top: 1px solid var(--border); padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; z-index: 100; }
+  .total-bar .label { font-size: 12px; color: var(--muted); font-family: 'IBM Plex Mono', monospace; }
+  .total-bar .amount { font-family: 'IBM Plex Mono', monospace; font-size: 18px; font-weight: 700; color: var(--accent); }
+  .empty-state { text-align: center; padding: 60px 20px; color: var(--muted); font-family: 'IBM Plex Mono', monospace; font-size: 13px; }
+  select option { background: #1a1d27; }
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  .spinning { animation: spin 1s linear infinite; display: inline-block; }
+  .scan-result-item { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; display: grid; grid-template-columns: 28px 1fr auto; gap: 4px 10px; cursor: pointer; transition: border-color 0.15s; }
+  .scan-result-item.selected { border-color: var(--accent); }
+  .scan-result-item.selected .scan-check { background: var(--accent); border-color: var(--accent); color: #000; }
+  .scan-check { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 11px; margin-top: 2px; transition: all 0.15s; grid-row: 1 / 3; align-self: center; }
+  .scan-edit-field { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; color: var(--text); font-size: 12px; font-family: 'IBM Plex Sans', sans-serif; width: 100%; outline: none; margin-top: 4px; }
+  .scan-edit-field:focus { border-color: var(--accent2); }
+  .scan-select, .scan-qty { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 3px 6px; color: var(--text); font-size: 11px; font-family: 'IBM Plex Mono', monospace; outline: none; }
+  .scan-qty { width: 48px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>// INVENTORY</h1>
+  <span class="stats" id="headerStats">0 items</span>
+  <button class="export-btn" onclick="exportCSV()">down CSV</button>
+  <button class="export-btn" onclick="manageApiKey()" style="border-color:#00d4ff;color:#00d4ff;" title="Set API Key">&#128273;</button>
+</header>
+
+<div class="toolbar">
+  <div class="search-wrap">
+    <input type="text" id="searchInput" placeholder="Search items..." oninput="render()">
+  </div>
+  <button class="filter-btn active" onclick="setFilter('all',this)">ALL</button>
+  <button class="filter-btn" onclick="setFilter('microcontroller',this)">MCU</button>
+  <button class="filter-btn" onclick="setFilter('kit',this)">KITS</button>
+  <button class="filter-btn" onclick="setFilter('motor',this)">MOTORS</button>
+  <button class="filter-btn" onclick="setFilter('display',this)">DISPLAY</button>
+  <button class="scan-btn" onclick="openScan()">CAM</button>
+  <button class="add-btn" onclick="openAdd()">+</button>
+</div>
+
+<div id="listContainer"></div>
+
+<div class="total-bar">
+  <div>
+    <div class="label">TOTAL SPENT</div>
+    <div class="label" id="filteredInfo" style="font-size:10px;margin-top:2px"></div>
+  </div>
+  <div class="amount" id="totalAmount">$0.00</div>
+</div>
+
+<!-- Edit/Add Modal -->
+
+<div class="modal-overlay" id="editOverlay" onclick="if(event.target===this)closeEdit()">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2 id="editTitle">ADD ITEM</h2>
+    <input type="hidden" id="editId">
+    <div class="field-group">
+      <label>Item Name</label>
+      <input type="text" id="fName" placeholder="e.g. Raspberry Pi Zero W">
+    </div>
+    <div class="field-row">
+      <div class="field-group">
+        <label>Price ($)</label>
+        <input type="number" id="fPrice" step="0.01" placeholder="0.00">
+      </div>
+      <div class="field-group">
+        <label>Qty</label>
+        <input type="number" id="fQty" value="1" min="1">
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field-group">
+        <label>Category</label>
+        <select id="fCategory">
+          <option value="microcontroller">Microcontroller</option>
+          <option value="display">Display</option>
+          <option value="motor">Motor/Servo</option>
+          <option value="sensor">Sensor</option>
+          <option value="power">Power</option>
+          <option value="kit">Kit/Parts</option>
+          <option value="audio">Audio</option>
+          <option value="storage">Storage</option>
+          <option value="toy">Toy/Game</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div class="field-group">
+        <label>Source</label>
+        <select id="fSource">
+          <option value="Microcenter">Microcenter</option>
+          <option value="Target">Target</option>
+          <option value="Amazon">Amazon</option>
+          <option value="Adafruit">Adafruit</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+    </div>
+    <div class="field-group">
+      <label>Notes</label>
+      <textarea id="fNotes" placeholder="SKU, specs, links, project ideas..."></textarea>
+    </div>
+    <div class="field-group">
+      <label>Status</label>
+      <select id="fStatus">
+        <option value="in_stock">In Stock</option>
+        <option value="in_use">In Use / Deployed</option>
+        <option value="used_up">Used Up</option>
+        <option value="want">Want to Buy</option>
+      </select>
+    </div>
+    <div class="modal-actions" id="editActions">
+      <button class="btn-cancel" onclick="closeEdit()">Cancel</button>
+      <button class="btn-save" onclick="saveItem()">Save Item</button>
+      <button class="btn-delete" id="deleteBtn" onclick="showDeleteConfirm()" style="display:none">DEL</button>
+    </div>
+    <div id="deleteConfirm" style="display:none;margin-top:12px;background:#1a0a0a;border:1px solid var(--danger);border-radius:10px;padding:14px;text-align:center;">
+      <div style="font-size:13px;color:var(--danger);font-family:'IBM Plex Mono',monospace;margin-bottom:12px;">Delete this item?</div>
+      <div style="display:flex;gap:10px;">
+        <button onclick="hideDeleteConfirm()" style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--muted);font-size:13px;cursor:pointer;">Keep it</button>
+        <button onclick="deleteItem()" style="flex:1;background:var(--danger);border:none;border-radius:8px;padding:10px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">Yes, delete</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Scan Modal -->
+
+<div class="modal-overlay" id="scanOverlay" onclick="if(event.target===this)closeScan()">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2 id="scanTitle">SCAN RECEIPT / PARTS LIST</h2>
+
+```
+<div id="scanStep1">
+  <div onclick="document.getElementById('imgInput').click()" style="border:2px dashed var(--accent2);border-radius:12px;padding:36px 20px;text-align:center;cursor:pointer;background:#0a1520;margin-bottom:14px;">
+    <div style="font-size:36px;margin-bottom:10px;">CAM</div>
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--accent2);">Tap to upload or take photo</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:6px;">Receipt, parts list, box label</div>
+  </div>
+  <input type="file" id="imgInput" accept="image/*" style="display:none" onchange="handleImageSelected(event)">
+  <div id="previewWrap" style="display:none;margin-bottom:14px;position:relative;">
+    <img id="imgPreview" style="width:100%;border-radius:10px;max-height:220px;object-fit:cover;">
+    <button onclick="clearScanImage()" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.7);border:none;border-radius:50%;width:28px;height:28px;color:#fff;font-size:14px;cursor:pointer;">X</button>
+  </div>
+  <div style="display:flex;gap:10px;">
+    <button class="btn-cancel" onclick="closeScan()">Cancel</button>
+    <button id="scanGoBtn" onclick="runScan()" style="flex:1;background:var(--accent2);border:none;border-radius:10px;padding:14px;color:#000;font-weight:700;font-size:15px;cursor:pointer;font-family:'IBM Plex Sans',sans-serif;opacity:0.4;" disabled>Scan with AI</button>
+  </div>
+</div>
+
+<div id="scanStep2" style="display:none;text-align:center;padding:40px 0;">
+  <div class="spinning" style="font-size:36px;margin-bottom:16px;">*</div>
+  <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--accent2);">Analyzing image...</div>
+  <div style="font-size:11px;color:var(--muted);margin-top:6px;">Claude is reading your receipt</div>
+</div>
+
+<div id="scanStep3" style="display:none;">
+  <div id="scanSummary" style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);margin-bottom:10px;"></div>
+  <div id="scanResults" style="max-height:45vh;overflow-y:auto;margin-bottom:14px;"></div>
+  <div style="display:flex;gap:10px;">
+    <button class="btn-cancel" onclick="closeScan()">Discard</button>
+    <button onclick="confirmScanItems()" style="flex:1;background:var(--accent);border:none;border-radius:10px;padding:14px;color:#000;font-weight:700;font-size:15px;cursor:pointer;font-family:'IBM Plex Sans',sans-serif;">Add Selected</button>
+  </div>
+</div>
+
+<div id="scanError" style="display:none;background:#1a0808;border:1px solid var(--danger);border-radius:10px;padding:14px;margin-bottom:14px;">
+  <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--danger);margin-bottom:8px;">SCAN FAILED</div>
+  <div id="scanErrorMsg" style="font-size:12px;color:var(--muted);word-break:break-word;"></div>
+  <button onclick="resetScan()" style="margin-top:12px;width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--text);font-size:13px;cursor:pointer;">Try Again</button>
+</div>
+
+<!-- API Key Entry -->
+<div id="scanApiKey" style="display:none;">
+  <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);margin-bottom:12px;">Enter your Anthropic API key to enable AI scanning. It will be saved on this device only.</div>
+  <input type="password" id="apiKeyInput" placeholder="sk-ant-api03-..." style="width:100%;background:var(--bg);border:1px solid var(--accent2);border-radius:8px;padding:10px 12px;color:var(--text);font-size:13px;outline:none;margin-bottom:10px;font-family:monospace;">
+  <div style="font-size:10px;color:var(--muted);margin-bottom:14px;">Get your key at <strong style="color:var(--accent2)">console.anthropic.com</strong></div>
+  <div style="display:flex;gap:10px;">
+    <button onclick="closeScan()" style="flex:0.6;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px;color:var(--muted);font-size:14px;cursor:pointer;">Cancel</button>
+    <button onclick="submitApiKey()" style="flex:1;background:var(--accent2);border:none;border-radius:10px;padding:14px;color:#000;font-weight:700;font-size:15px;cursor:pointer;">Save & Scan</button>
+  </div>
+</div>
+```
+
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY = 'kev_inventory_v2';
+
+function uid() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+}
+
+const DEFAULT_ITEMS = [
+  { id:uid(), name:"LEGO Technic MC The Fox", price:39.99, qty:1, category:"toy", source:"Microcenter", status:"in_stock", notes:"Item 982991" },
+  { id:uid(), name:"IPSG PLA Filament 1.75mm Black", price:9.99, qty:1, category:"kit", source:"Microcenter", status:"in_stock", notes:"Item 833020" },
+  { id:uid(), name:"Arduino Nano", price:4.96, qty:1, category:"microcontroller", source:"Microcenter", status:"in_stock", notes:"Item 425298 - CLEARANCE (orig $25.99, saved $21.03)" },
+  { id:uid(), name:"Pimoroni HyperPixel 4.0 Square Touch Display", price:61.96, qty:1, category:"display", source:"Microcenter", status:"in_stock", notes:"Item 208686 - CLEARANCE (orig $77.99, saved $16.03)" },
+  { id:uid(), name:"Raspberry Pi Pico WH", price:5.99, qty:1, category:"microcontroller", source:"Microcenter", status:"in_stock", notes:"Item 412197" },
+  { id:uid(), name:"Raspberry Pi Pico 2", price:3.99, qty:1, category:"microcontroller", source:"Microcenter", status:"in_stock", notes:"Item 733642" },
+  { id:uid(), name:"Raspberry Pi Zero WH", price:15.99, qty:1, category:"microcontroller", source:"Microcenter", status:"in_stock", notes:"Item 698605" },
+  { id:uid(), name:"Official Raspberry Pi Zero Case", price:4.99, qty:1, category:"storage", source:"Microcenter", status:"in_stock", notes:"Item 422709" },
+  { id:uid(), name:"Mindware Foodie Fidget: Ramen Bowl", price:14.99, qty:1, category:"toy", source:"Microcenter", status:"in_stock", notes:"Item 897132" },
+  { id:uid(), name:"IPSG Pi Kit Deluxe Parts Pack (160+ components)", price:19.99, qty:1, category:"kit", source:"Microcenter", status:"in_stock", notes:"Item 900902 - Jumper wires, LEDs, resistors, capacitors, transistors, sensors, servo, breadboard, 555 timer" },
+  { id:uid(), name:"DC Motor 6V-12V", price:5.99, qty:1, category:"motor", source:"Microcenter", status:"in_stock", notes:"Item 679209" },
+  { id:uid(), name:"4-Pin 8-inch Cable", price:6.99, qty:1, category:"kit", source:"Microcenter", status:"in_stock", notes:"Item 661561" },
+  { id:uid(), name:"Flat Side Motor 1.5V-3V", price:2.99, qty:2, category:"motor", source:"Microcenter", status:"in_stock", notes:"Item 679126" },
+  { id:uid(), name:"Solar Cell 100mA 7.2V", price:9.99, qty:1, category:"power", source:"Microcenter", status:"in_stock", notes:"Item 680215" },
+  { id:uid(), name:"Adafruit Mini USB Microphone", price:6.99, qty:1, category:"audio", source:"Microcenter", status:"in_stock", notes:"Item 007013" },
+  { id:uid(), name:"Battery Holder 4-Cell", price:2.49, qty:1, category:"power", source:"Microcenter", status:"in_stock", notes:"Item 044784" },
+  { id:uid(), name:"Plastic Gear Servo", price:13.95, qty:2, category:"motor", source:"Microcenter", status:"in_stock", notes:"Items 381533 and 381525" },
+  { id:uid(), name:"Eclipseen 10-Compartment Storage Box", price:5.99, qty:1, category:"storage", source:"Microcenter", status:"in_stock", notes:"Item 701862" },
+  { id:uid(), name:"Adafruit Li-Ion Battery 3.7V 2000mAh", price:12.49, qty:1, category:"power", source:"Microcenter", status:"in_stock", notes:"Item 715052" },
+  { id:uid(), name:"HDMI 5in 800x480 Display Backpack w/ Touch", price:59.99, qty:1, category:"display", source:"Microcenter", status:"in_stock", notes:"WA2608-A - adafru.it/2260" },
+  { id:uid(), name:"Teach Tech Rivet-Rex Solar Hydraulic Robot Kit", price:34.99, qty:1, category:"kit", source:"Target", status:"in_stock", notes:"12 builds, 200+ parts, Ages 10+" },
+  // === MICROCENTER RECEIPT 04/25/26 ===
+  { id:uid(), name:"Raspberry Pi 64GB A2 SD Card + Reader", price:19.99, qty:2, category:"kit", source:"Microcenter", status:"in_stock", notes:"Item 783316" },
+  { id:uid(), name:"Raspberry Pi MicroHDMI to HDMI Cable 1M", price:7.99, qty:1, category:"kit", source:"Microcenter", status:"in_stock", notes:"Item 950402" },
+  { id:uid(), name:"IPSG 37-in-1 Sensor Kit", price:36.99, qty:1, category:"sensor", source:"Microcenter", status:"in_stock", notes:"Item 900852 - Includes: DHT11, PIR, ultrasonic, joystick, relay, MQ-2 gas, LM35, 18B20, RGB LED, IR TX/RX, tilt, hall magnetic, knock, crash, capacitive touch, photoresistor, potentiometer, pulse rate, reed switch, rotary encoder, TEMT6000, thermistor, line tracking, laser head, obstacle avoidance, buzzer x2, microphone, alcohol sensor, ADXL345, light cup" },
+  { id:uid(), name:"MCM Elec 9V Battery Clip", price:1.99, qty:1, category:"power", source:"Microcenter", status:"in_stock", notes:"Item 725648" },
+  { id:uid(), name:"IPSG Helping Hand with Magnifier", price:4.99, qty:1, category:"kit", source:"Microcenter", status:"in_stock", notes:"Item 087791" },
+  { id:uid(), name:"Raspberry Pi 12.5W Power Supply (US)", price:7.99, qty:1, category:"power", source:"Microcenter", status:"in_stock", notes:"Item 346866" },
+  { id:uid(), name:"LKG Indus 9V Battery Holder", price:1.99, qty:1, category:"power", source:"Microcenter", status:"in_stock", notes:"Item 234732" },
+  { id:uid(), name:"Raspberry Pi Mini HDMI to HDMI Adapter", price:3.99, qty:1, category:"kit", source:"Microcenter", status:"in_stock", notes:"Item 826859" },
+  { id:uid(), name:"IPSG Solder/Perf Board 70x90mm (5pcs)", price:4.99, qty:1, category:"kit", source:"Microcenter", status:"in_stock", notes:"Item 422790" },
+  { id:uid(), name:"Adafruit HDMI 5in 800x480 Touchscreen", price:47.99, qty:1, category:"display", source:"Microcenter", status:"in_stock", notes:"Item 006676 - standalone display, no backpack" },
+  { id:uid(), name:"IPSG Stepper Motor Driver Board (3pcs)", price:11.99, qty:1, category:"motor", source:"Microcenter", status:"in_stock", notes:"Item 301465" },
+];
+
+function load() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch(e) {}
+  const data = DEFAULT_ITEMS.map(i => ({...i}));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  return data;
+}
+
+function save(data) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+let items = load();
+let activeFilter = 'all';
+
+function setFilter(cat, btn) {
+  activeFilter = cat;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  render();
+}
+
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function render() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  const filtered = items.filter(item => {
+    const matchCat = activeFilter === 'all' || item.category === activeFilter;
+    const matchQ = !q || item.name.toLowerCase().includes(q) || (item.notes||'').toLowerCase().includes(q);
+    return matchCat && matchQ;
+  });
+
+  const cats = {
+    microcontroller:{label:'Microcontrollers',items:[]},
+    display:{label:'Displays',items:[]},
+    motor:{label:'Motors and Servos',items:[]},
+    sensor:{label:'Sensors',items:[]},
+    power:{label:'Power',items:[]},
+    kit:{label:'Kits and Parts',items:[]},
+    audio:{label:'Audio',items:[]},
+    storage:{label:'Storage and Cases',items:[]},
+    toy:{label:'Toys and Games',items:[]},
+    other:{label:'Other',items:[]},
+  };
+
+  filtered.forEach(item => { (cats[item.category]||cats.other).items.push(item); });
+
+  let html = '';
+  let total = 0;
+
+  Object.entries(cats).forEach(([,group]) => {
+    if (!group.items.length) return;
+    html += '<div class="section-header"><span class="dot"></span>' + group.label + '<span style="margin-left:auto;font-size:10px">' + group.items.length + '</span></div>';
+    group.items.forEach(item => {
+      total += (item.price||0) * (item.qty||1);
+      const isClearance = (item.notes||'').toLowerCase().includes('clearance');
+      html += '<div class="item-card" onclick="openEdit(\'' + item.id + '\')">'
+        + '<div class="item-name">' + esc(item.name) + '</div>'
+        + '<div class="item-price">' + (item.price ? '$'+item.price.toFixed(2) : '--') + '</div>'
+        + '<div class="item-meta">'
+        + '<span class="tag ' + item.category + '">' + item.category + '</span>'
+        + '<span class="tag">' + esc(item.source) + '</span>'
+        + (isClearance ? '<span class="tag clearance">clearance</span>' : '')
+        + (item.status==='in_use' ? '<span class="tag" style="color:var(--accent2)">deployed</span>' : '')
+        + (item.status==='used_up' ? '<span class="tag" style="color:var(--danger)">used up</span>' : '')
+        + '</div>'
+        + '<div class="qty-badge">x' + (item.qty||1) + '</div>'
+        + '</div>';
+    });
+  });
+
+  if (!html) html = '<div class="empty-state">// no items found</div>';
+  document.getElementById('listContainer').innerHTML = html;
+  document.getElementById('totalAmount').textContent = '$' + total.toFixed(2);
+  document.getElementById('headerStats').textContent = filtered.length + ' items';
+  document.getElementById('filteredInfo').textContent = filtered.length < items.length ? '(' + filtered.length + ' of ' + items.length + ' shown)' : items.length + ' total';
+}
+
+// EDIT MODAL
+function openAdd() {
+  document.getElementById('editTitle').textContent = 'ADD ITEM';
+  document.getElementById('editId').value = '';
+  document.getElementById('fName').value = '';
+  document.getElementById('fPrice').value = '';
+  document.getElementById('fQty').value = '1';
+  document.getElementById('fCategory').value = 'kit';
+  document.getElementById('fSource').value = 'Microcenter';
+  document.getElementById('fNotes').value = '';
+  document.getElementById('fStatus').value = 'in_stock';
+  document.getElementById('deleteBtn').style.display = 'none';
+  hideDeleteConfirm();
+  document.getElementById('editOverlay').classList.add('open');
+}
+
+function openEdit(id) {
+  const item = items.find(i => i.id === id);
+  if (!item) return;
+  document.getElementById('editTitle').textContent = 'EDIT ITEM';
+  document.getElementById('editId').value = id;
+  document.getElementById('fName').value = item.name;
+  document.getElementById('fPrice').value = item.price || '';
+  document.getElementById('fQty').value = item.qty || 1;
+  document.getElementById('fCategory').value = item.category || 'kit';
+  document.getElementById('fSource').value = item.source || 'Microcenter';
+  document.getElementById('fNotes').value = item.notes || '';
+  document.getElementById('fStatus').value = item.status || 'in_stock';
+  document.getElementById('deleteBtn').style.display = 'block';
+  hideDeleteConfirm();
+  document.getElementById('editOverlay').classList.add('open');
+}
+
+function closeEdit() {
+  document.getElementById('editOverlay').classList.remove('open');
+  hideDeleteConfirm();
+}
+
+function saveItem() {
+  const id = document.getElementById('editId').value;
+  const item = {
+    id: id || uid(),
+    name: document.getElementById('fName').value.trim(),
+    price: parseFloat(document.getElementById('fPrice').value) || 0,
+    qty: parseInt(document.getElementById('fQty').value) || 1,
+    category: document.getElementById('fCategory').value,
+    source: document.getElementById('fSource').value,
+    notes: document.getElementById('fNotes').value.trim(),
+    status: document.getElementById('fStatus').value,
+  };
+  if (!item.name) return;
+  if (id) {
+    const idx = items.findIndex(i => i.id === id);
+    if (idx >= 0) items[idx] = item;
+  } else {
+    items.unshift(item);
+  }
+  save(items);
+  closeEdit();
+  render();
+}
+
+function showDeleteConfirm() {
+  document.getElementById('deleteConfirm').style.display = 'block';
+  document.getElementById('editActions').style.display = 'none';
+}
+
+function hideDeleteConfirm() {
+  document.getElementById('deleteConfirm').style.display = 'none';
+  document.getElementById('editActions').style.display = 'flex';
+}
+
+function deleteItem() {
+  const id = document.getElementById('editId').value;
+  if (!id) return;
+  items = items.filter(i => i.id !== id);
+  save(items);
+  closeEdit();
+  render();
+}
+
+function exportCSV() {
+  const header = ['Name','Price','Qty','Category','Source','Status','Notes'];
+  const rows = items.map(i => [
+    '"'+String(i.name||'').replace(/"/g,'""')+'"',
+    i.price, i.qty, i.category, i.source, i.status,
+    '"'+String(i.notes||'').replace(/"/g,'""')+'"'
+  ]);
+  const csv = [header,...rows].map(r=>r.join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download = 'inventory.csv';
+  a.click();
+}
+
+// SCAN MODAL
+let scannedItems = [];
+let imageBase64 = null;
+let imageMime = 'image/jpeg';
+
+function openScan() { resetScan(); document.getElementById('scanOverlay').classList.add('open'); }
+function closeScan() { document.getElementById('scanOverlay').classList.remove('open'); }
+
+function resetScan() {
+  imageBase64 = null;
+  scannedItems = [];
+  document.getElementById('scanStep1').style.display = 'block';
+  document.getElementById('scanStep2').style.display = 'none';
+  document.getElementById('scanStep3').style.display = 'none';
+  document.getElementById('scanError').style.display = 'none';
+  document.getElementById('previewWrap').style.display = 'none';
+  document.getElementById('imgInput').value = '';
+  document.getElementById('scanGoBtn').disabled = true;
+  document.getElementById('scanGoBtn').style.opacity = '0.4';
+  document.getElementById('scanTitle').textContent = 'SCAN RECEIPT / PARTS LIST';
+}
+
+function clearScanImage() {
+  imageBase64 = null;
+  document.getElementById('previewWrap').style.display = 'none';
+  document.getElementById('imgInput').value = '';
+  document.getElementById('scanGoBtn').disabled = true;
+  document.getElementById('scanGoBtn').style.opacity = '0.4';
+}
+
+function handleImageSelected(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  imageMime = file.type || 'image/jpeg';
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    const dataUrl = ev.target.result;
+    imageBase64 = dataUrl.split(',')[1];
+    document.getElementById('imgPreview').src = dataUrl;
+    document.getElementById('previewWrap').style.display = 'block';
+    document.getElementById('scanGoBtn').disabled = false;
+    document.getElementById('scanGoBtn').style.opacity = '1';
+  };
+  reader.readAsDataURL(file);
+}
+
+async function runScan() {
+  if (!imageBase64) return;
+
+  var apiKey = localStorage.getItem('anthropic_api_key') || '';
+  if (!apiKey) {
+    document.getElementById('scanStep1').style.display = 'none';
+    document.getElementById('scanApiKey').style.display = 'block';
+    return;
+  }
+
+  document.getElementById('scanStep1').style.display = 'none';
+  document.getElementById('scanApiKey').style.display = 'none';
+  document.getElementById('scanStep2').style.display = 'block';
+
+  var promptText = 'Analyze this image of a receipt, parts list, or product box. Return ONLY a raw JSON array with no markdown and no explanation. Each object must have: "name" (clean readable string), "price" (number or null), "qty" (number default 1 combine duplicates), "category" (one of: microcontroller display motor sensor power kit audio storage toy other), "source" (store name or Unknown), "notes" (SKU specs clearance info or empty string). Expand abbreviations like RAS PI PICO WH to Raspberry Pi Pico WH. Return ONLY the JSON array.';
+
+  try {
+    var resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5',
+        max_tokens: 2000,
+        messages: [{ role: 'user', content: [
+          { type: 'image', source: { type: 'base64', media_type: imageMime, data: imageBase64 } },
+          { type: 'text', text: promptText }
+        ]}]
+      })
+    });
+
+    var respText = await resp.text();
+    if (!resp.ok) {
+      if (resp.status === 401) { localStorage.removeItem('anthropic_api_key'); }
+      throw new Error('HTTP ' + resp.status + ': ' + respText.slice(0, 200));
+    }
+
+    var data = JSON.parse(respText);
+    if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+
+    var raw = (data.content || []).map(function(b){ return b.text || ''; }).join('').trim();
+    var clean = raw.replace(/```json|```/g, '').trim();
+    var parsed = JSON.parse(clean);
+    if (!Array.isArray(parsed) || !parsed.length) throw new Error('No items detected.');
+
+    scannedItems = parsed.map(function(item, i){ return Object.assign({}, item, {_idx:i, _selected:true}); });
+    showScanResults();
+
+  } catch(err) {
+    document.getElementById('scanStep2').style.display = 'none';
+    document.getElementById('scanError').style.display = 'block';
+    document.getElementById('scanErrorMsg').textContent = err.message || 'Unknown error.';
+  }
+}
+
+
+function showScanResults() {
+  document.getElementById('scanStep2').style.display = 'none';
+  document.getElementById('scanStep3').style.display = 'block';
+  document.getElementById('scanTitle').textContent = 'REVIEW ITEMS';
+  document.getElementById('scanSummary').textContent = 'Found ' + scannedItems.length + ' item' + (scannedItems.length!==1?'s':'') + ' -- deselect any you do not want';
+
+  const CATS = ['microcontroller','display','motor','sensor','power','kit','audio','storage','toy','other'];
+  var html = '';
+  scannedItems.forEach(function(item, i) {
+    var opts = CATS.map(function(c){ return '<option value="' + c + '"' + (item.category===c?' selected':'') + '>' + c + '</option>'; }).join('');
+    html += '<div class="scan-result-item selected" id="sri_' + i + '" onclick="toggleScanItem(' + i + ')">'
+      + '<div class="scan-check" id="chk_' + i + '">v</div>'
+      + '<div style="grid-column:2;grid-row:1">'
+      + '<input class="scan-edit-field" value="' + esc(item.name) + '" onclick="event.stopPropagation()" oninput="scannedItems[' + i + '].name=this.value">'
+      + '</div>'
+      + '<div style="grid-column:3;grid-row:1;font-family:\'IBM Plex Mono\',monospace;font-size:13px;font-weight:600;color:var(--accent);text-align:right;white-space:nowrap;">'
+      + (item.price!=null ? '$'+Number(item.price).toFixed(2) : '--') + '</div>'
+      + '<div style="grid-column:2;grid-row:2;display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:4px;">'
+      + '<select class="scan-select" onclick="event.stopPropagation()" onchange="scannedItems[' + i + '].category=this.value">' + opts + '</select>'
+      + '<span style="color:var(--muted);font-size:10px">qty</span>'
+      + '<input type="number" class="scan-qty" value="' + (item.qty||1) + '" min="1" onclick="event.stopPropagation()" oninput="scannedItems[' + i + '].qty=parseInt(this.value)||1">'
+      + (item.notes ? '<span style="color:var(--muted);font-size:10px;width:100%">' + esc(item.notes) + '</span>' : '')
+      + '</div>'
+      + '</div>';
+  });
+  document.getElementById('scanResults').innerHTML = html;
+}
+
+function toggleScanItem(i) {
+  scannedItems[i]._selected = !scannedItems[i]._selected;
+  document.getElementById('sri_'+i).classList.toggle('selected', scannedItems[i]._selected);
+  document.getElementById('chk_'+i).textContent = scannedItems[i]._selected ? 'v' : '';
+}
+
+function confirmScanItems() {
+  var toAdd = scannedItems.filter(function(i){ return i._selected && i.name; }).map(function(i){
+    return { id:uid(), name:i.name.trim(), price:parseFloat(i.price)||0, qty:parseInt(i.qty)||1, category:i.category||'other', source:i.source||'Unknown', notes:i.notes||'', status:'in_stock' };
+  });
+  if (toAdd.length) { items = toAdd.concat(items); save(items); render(); }
+  closeScan();
+}
+
+function manageApiKey() {
+  var current = getSavedApiKey();
+  var msg = current ? 'API key is saved. Enter a new one to replace, or leave blank to clear it.' : 'Enter your Anthropic API key (sk-ant-...):'
+  var entered = prompt(msg, current ? '(key saved)' : '');
+  if (entered === null) return;
+  if (!entered.trim() || entered === '(key saved)') {
+    localStorage.removeItem('anthropic_api_key');
+    alert('API key cleared.');
+  } else {
+    saveApiKey(entered);
+    alert('API key saved!');
+  }
+}
+
+function submitApiKey() {
+  var key = document.getElementById('apiKeyInput').value.trim();
+  if (!key) { alert('Please enter your API key.'); return; }
+  localStorage.setItem('anthropic_api_key', key);
+  document.getElementById('scanApiKey').style.display = 'none';
+  document.getElementById('scanStep1').style.display = 'block';
+  runScan();
+}
+
+function manageApiKey() {
+  var current = localStorage.getItem('anthropic_api_key');
+  var msg = current ? 'API key is saved. Tap OK to clear it, Cancel to keep.' : 'No API key saved yet. Use the scan button to add one.';
+  if (current) {
+    if (confirm(msg)) {
+      localStorage.removeItem('anthropic_api_key');
+      alert('API key cleared.');
+    }
+  } else {
+    alert(msg);
+  }
+}
+
+render();
+</script>
+
+</body>
+</html>
